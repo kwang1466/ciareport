@@ -1,0 +1,9 @@
+*.sublime-project
+*.sublime-workspace
+.ropeproject
+~$.*
+*.docx
+*.log
+*.tmp
+*.xlsx
+*.ini

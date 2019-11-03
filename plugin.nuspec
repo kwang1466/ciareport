@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd">
+    <metadata>
+        <id>com.castsoftware.uc.ibmshell</id>
+        <version>1.6.0</version>
+        <title>IBMShell Analyzer</title>
+        <authors>CAST Community</authors>
+        <owners>CAST</owners>
+        <requireLicenseAcceptance>false</requireLicenseAcceptance>
+        <licenseUrl>https://help.castsoftware.com/hc/en-us/articles/212612648-AIP-Extension-License</licenseUrl>
+        <projectUrl>https://doc.castsoftware.com/display/TECHNOS/ibmshell+-+1.0</projectUrl>
+        <iconUrl>https://raw.githubusercontent.com/CAST-Extend/resources/master/com.castsoftware.jee.png</iconUrl>
+        <description>This extension provides support of ibm shell application</description>
+        <releaseNotes>https://doc.castsoftware.com/display/TECHNOS/ibmshell-+1.0+-+Release+Notes</releaseNotes>
+        <tags>Java JEE J2EE</tags>
+        <dependencies>
+            <dependency id="CAIP" version="8.0.0" />
+        </dependencies>
+    </metadata>
+    <files>
+        <file src="**" exclude="_rels\*.*"/>
+    </files>
+</package>
