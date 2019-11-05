@@ -8,9 +8,10 @@ from cast_objs import *
 
 class CIAReport(object):
     """docstring for CIAReport"""
-    def __init__(self, report_loc, db_util):
+    def __init__(self, report_path, db_util):
         super(CIAReport, self).__init__()
         self.db_util = db_util
+        self.report_path = report_path
 
     def get_changed_objs(self):
         logging.info('starting to get changed objects')
@@ -87,13 +88,13 @@ class CIAReport(object):
         impact_obj_list = list()
         for o in cursor:
             count += 1
-            logging.info(o)
+            # logging.info(o)
             impact_obj_list.append(ImpactObj(o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7]))
 
         logging.info('Found {} impacted objects'.format(count))
         return impact_obj_list
 
-    def generate_report(self, headers, data, report_loc):
+    def generate_report(self, headers, data, report_name):
         wb = xlwt.Workbook(encoding='utf-8')
         ws = wb.add_sheet('Report')
 
@@ -115,7 +116,7 @@ class CIAReport(object):
                     # logging.info('{}:{}'.format(col, getattr(rowdata, field)))
                     ws.write(row_num, col, getattr(rowdata, field), default_style)
 
-        wb.save(report_loc)
+        wb.save(self.report_path + '/' + report_name)
         logging.info("Genereated Report Done!")        
 
 
@@ -124,29 +125,44 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(add_help=False)
     requiredNamed = parser.add_argument_group('required named arguments')
-    requiredNamed.add_argument('-o', required=False, dest='report_loc', default='./', help='report location')
+    requiredNamed.add_argument('-o', required=False, dest='report_path', default='./Reports', help='report location')
     requiredNamed.add_argument('-h', required=False, dest='host', default='localhost', help='database host name or ip')
     requiredNamed.add_argument('-p', required=False, dest='port', default=2280, help='database port')
     requiredNamed.add_argument('-s', required=False, dest='schema_prefix', default='webgoat', help='Schema Prefix Name')
     args = parser.parse_args()
 
-    report_loc = args.report_loc
+    report_path = args.report_path
     host = args.host
     port = args.port
     schema_prefix = args.schema_prefix
     # use db tool to create engine and connect to database
     db_util = DBTool(schema_prefix, host, port)
-    ciareport = CIAReport(report_loc, db_util)
+    ciareport = CIAReport(report_path, db_util)
     # get changed objects from central schema
     changed_objs = ciareport.get_changed_objs()
     changed_headers = ['local_id', 'central_id', 'full_name',
                        'module', 'snapshot', 'status', 'obj_type']
     ciareport.generate_report(changed_headers, changed_objs, 'changedObjs.xls')
 
-    # get impact objects from local schema
-    impact_objs = ciareport.get_impact_objs(2832, 2, 2, 613)
-    # ciareport.generate_report( impact_objs, 'impactObjs.xls')
-    impact_headers = ['source_id', 'target_id', 'caller_name',
-                      'caller_fullname', 'callee_name', 'callee_fullname',
-                      'call_level', 'call_way']
-    ciareport.generate_report(impact_headers, impact_objs, 'impactObjs.xls')
+    # # get impact objects from local schema for specific object
+    # impact_objs = ciareport.get_impact_objs(2832, 2, 2, 613)
+    # # ciareport.generate_report( impact_objs, 'impactObjs.xls')
+    # impact_headers = ['source_id', 'target_id', 'caller_name',
+    #                   'caller_fullname', 'callee_name', 'callee_fullname',
+    #                   'call_level', 'call_way']
+    # ciareport.generate_report(impact_headers, impact_objs, 'impactObjs.xls')
+
+    # iterate changed_objs and generate the impact report for each object
+    for count, single_obj in enumerate(changed_objs):
+        # normally we only generate for 5 impact_object reort
+        if count > 5:
+            break
+        local_id = single_obj.local_id
+        # by default we only calculate 2 levels calling/called
+        impact_objs = ciareport.get_impact_objs(local_id, 2, 2, 613)
+        # ciareport.generate_report( impact_objs, 'impactObjs.xls')
+        impact_headers = ['source_id', 'target_id', 'caller_name',
+                          'caller_fullname', 'callee_name', 'callee_fullname',
+                          'call_level', 'call_way']
+        ciareport.generate_report(impact_headers, impact_objs, 
+                                  'impactObjs-{}.xls'.format(single_obj.full_name))
