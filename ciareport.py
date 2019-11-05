@@ -160,7 +160,6 @@ if __name__ == '__main__':
         local_id = single_obj.local_id
         # by default we only calculate 2 levels calling/called
         impact_objs = ciareport.get_impact_objs(local_id, 2, 2, 613)
-        # ciareport.generate_report( impact_objs, 'impactObjs.xls')
         impact_headers = ['source_id', 'target_id', 'caller_name',
                           'caller_fullname', 'callee_name', 'callee_fullname',
                           'call_level', 'call_way']
