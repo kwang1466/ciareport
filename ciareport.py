@@ -1,0 +1,93 @@
+import cast_upgrade_1_6_2
+import logging
+from db_util import *
+import argparse
+from packages import xlwt
+from cast_objs import *
+
+
+class CIAReport(object):
+    """docstring for CIAReport"""
+    def __init__(self, report_loc, db_util):
+        super(CIAReport, self).__init__()
+        self.db_util = db_util
+
+    def get_changed_objs(self):
+        logging.info('starting to get changed objects')
+        sql_str = '''
+                    select  idm.local_object_id,cos.object_id as central_object_id,cos.object_name,cos.module_name,cos.snapshot_name,cos.object_status,
+                    case 
+                     when lower(cos.object_status) like 'deleted'
+                        then (select dtdv.techno_type_name from dss_techno_display_vw dtdv where dtdv.techno_type_id = cos.obejct_techno_type_id )
+                    else ( select dot.object_type_name from  dss_object_types dot, dss_objects dob where dob.object_id = cos.object_id and dot.object_type_id = dob.object_type_id)
+                    end as OBJECT_TYPE
+                    from csv_objects_statuses cos left outer join csv_obj_mapping idm on cos.object_id=idm.central_object_id
+
+                    where snaphot_id = (select max(snapshot_id) from dss_snapshots) and object_is_artifact = 'Artifact'
+                    and object_status not like 'Unchanged';
+                  '''
+        sql_str = ''.join(sql_str.split('\n'))
+        logging.info(sql_str)
+        central_schema = self.db_util.get_schema('central')
+        cursor = central_schema.create_cursor()
+        cursor.execute(sql_str)
+        count = 0
+        change_obj_list = list()
+        for o in cursor:
+            count += 1
+            # logging.info(o)
+            change_obj_list.append(ChangedObj(o[0], o[1], o[2], o[3], o[4], o[5], o[6]))
+
+        logging.info('Found {} changed objects'.format(count))
+        return change_obj_list
+        
+    def get_impact_objs(self):
+        logging.info('Starting to get impacted objects')
+        
+
+    def generate_report(self, data, report_loc):
+        wb = xlwt.Workbook(encoding='utf-8')
+        ws = wb.add_sheet('Report')
+
+        # Sheet header, first row
+        row_num = 0
+        font_style = xlwt.XFStyle()
+        font_style.font.bold = True
+
+        # get the object properties and set as headers
+        headers = data[0].__dict__.keys()
+        for col_num, val in enumerate(headers):
+            ws.write(row_num, col_num, val, font_style)
+
+        # Sheet body, remaining rows
+        default_style = xlwt.XFStyle()
+                   
+        for rowdata in data:
+            row_num += 1
+            for col, val in enumerate(rowdata.__dict__.values()):
+                ws.write(row_num, col, val, default_style)
+
+        wb.save(report_loc)
+        logging.info("Genereated Report Done!")
+
+
+if __name__ == '__main__':
+    logging.info('start generating report!')
+
+    parser = argparse.ArgumentParser(add_help=False)
+    requiredNamed = parser.add_argument_group('required named arguments')
+    requiredNamed.add_argument('-o', required=False, dest='report_loc', default='./', help='report location')
+    requiredNamed.add_argument('-h', required=False, dest='host', default='localhost', help='database host name or ip')
+    requiredNamed.add_argument('-p', required=False, dest='port', default=2280, help='database port')
+    requiredNamed.add_argument('-s', required=False, dest='schema_prefix', default='webgoat', help='Schema Prefix Name')
+    args = parser.parse_args()
+
+    report_loc = args.report_loc
+    host = args.host
+    port = args.port
+    schema_prefix = args.schema_prefix
+    # use db tool to create engine and connect to database
+    db_util = DBTool(schema_prefix, host, port)
+    ciareport = CIAReport(report_loc, db_util)
+    changed_objs = ciareport.get_changed_objs()
+    ciareport.generate_report( changed_objs, 'changedObjs.xls')
