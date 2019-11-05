@@ -10,22 +10,18 @@ engine = create_postgres_engine(user='operator',
                            host='localhost',
                            port=2280)
 
-central = CastSchema('webgoat_local', engine=engine)
+local_schema = CastSchema('webgoat_local', engine=engine)
 
-# logging.info(central.get_caip_version())
 
-# for o in central.get_extensions():
-#     logging.info(o)
-
-cursor = central.create_cursor()
+cursor = local_schema.create_cursor()
 function_call = 'pre_olia'
 
-central._execute_function(cursor, function_call)
+local_schema._execute_function(cursor, function_call)
 
 function_call2 = 'OLIA'
 paramters = '2832, 2, 2, 0, 613'
 
-central._execute_function(cursor, function_call2, paramters)
+local_schema._execute_function(cursor, function_call2, paramters)
 
 sql_str = '''
 select distinct 
@@ -54,15 +50,9 @@ and sourcekey.IdKey=t.IdSource
 order by t.InternalLevel;
 '''
 
-central._execute_raw_query(cursor, sql_str)
+# be careful: a bug in _execute_raw_query which can't hold more than 100 data
+local_schema._execute_raw_query(cursor, sql_str)
 
 for o in cursor:
     logging.info(o)
-
-
-# ret = central._execute_raw_query(cursor, 'select * from cdt_objects limit 100')
-# logging.info(ret)
-# for line in ret:
-#     logging.info(str(line))
-
 

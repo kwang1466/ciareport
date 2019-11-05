@@ -10,11 +10,20 @@ class CastObj(object):
         self.full_name = full_name 
         
 
-class ImpactObj(CastObj):
+class ImpactObj(object):
     """docstring for ImpactObj"""
-    def __init__(self, id, name, obj_type, full_name, link_type=''):
+    def __init__(self, source_id, target_id, caller_name,
+                 caller_fullname, callee_name, callee_fullname,
+                 call_level, call_way):
         super(ImpactObj, self).__init__()
-        self.link_type = link_type
+        self.source_id = source_id
+        self.target_id = target_id
+        self.caller_name = caller_name
+        self.caller_fullname = caller_fullname
+        self.callee_name = callee_name
+        self.callee_fullname = callee_fullname
+        self.call_level = call_level
+        self.call_way = call_way
 
 
 class ChangedObj(object):

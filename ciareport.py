@@ -22,12 +22,11 @@ class CIAReport(object):
                     else ( select dot.object_type_name from  dss_object_types dot, dss_objects dob where dob.object_id = cos.object_id and dot.object_type_id = dob.object_type_id)
                     end as OBJECT_TYPE
                     from csv_objects_statuses cos left outer join csv_obj_mapping idm on cos.object_id=idm.central_object_id
-
                     where snaphot_id = (select max(snapshot_id) from dss_snapshots) and object_is_artifact = 'Artifact'
                     and object_status not like 'Unchanged';
                   '''
         sql_str = ''.join(sql_str.split('\n'))
-        logging.info(sql_str)
+        # logging.info(sql_str)
         central_schema = self.db_util.get_schema('central')
         cursor = central_schema.create_cursor()
         cursor.execute(sql_str)
@@ -41,11 +40,60 @@ class CIAReport(object):
         logging.info('Found {} changed objects'.format(count))
         return change_obj_list
         
-    def get_impact_objs(self):
+    def get_impact_objs(self, obj_id, called_lvl, calling_lvl, obj_type='613'):
+        # try to get impact objects from local schema
         logging.info('Starting to get impacted objects')
-        
+        local_schema = self.db_util.get_schema('local')
+        cursor = local_schema.create_cursor()
+        function_call = 'pre_olia'
 
-    def generate_report(self, data, report_loc):
+        local_schema._execute_function(cursor, function_call)
+
+        function_call2 = 'OLIA'
+        # function: olia in local schema
+        # olia(p_idsource integer, p_levelcalled integer, 
+        #      p_levelcalling integer, p_accknd integer, p_objtyp integer)
+        paramters = '{},{},{},{},{}'.format(obj_id, called_lvl, calling_lvl, 0, obj_type)
+
+        # paramters = '2832, 2, 2, 0, 613'
+        local_schema._execute_function(cursor, function_call2, paramters)
+
+        sql_str = '''
+        select distinct 
+        t.IdSource, 
+        t.IdTarget, 
+        sourcekey.KeyNam as caller_name,
+        coalesce(sourceobject.FullName, ' ') as caller_fullname,
+        targetkey.KeyNam as callee_name, 
+        coalesce(targetobject.FullName, ' ') as callee_fullname,
+        t.InternalLevel as call_level, 
+        Case t.Ways  
+        WHEN '1' THEN 'called'
+        WHEN '2' THEN 'calling'
+        ELSE 'others' 
+        END call_relationships
+        from 
+        TmpOLIA t, 
+        webgoat_local.Keys sourcekey left outer join webgoat_local.ObjFulNam sourceObject on sourcekey.IdKey = sourceobject.IdObj ,
+        webgoat_local.Keys targetkey left outer join webgoat_local.ObjFulNam targetobject on targetkey.IdKey = targetobject.IdObj   
+        where 
+        targetkey.IdKey = t.IdTarget 
+        and sourcekey.IdKey=t.IdSource
+        order by t.InternalLevel;
+        '''
+        sql_str = ''.join(sql_str.split('\n'))
+        cursor.execute(sql_str)
+        count = 0
+        impact_obj_list = list()
+        for o in cursor:
+            count += 1
+            logging.info(o)
+            impact_obj_list.append(ImpactObj(o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7]))
+
+        logging.info('Found {} impacted objects'.format(count))
+        return impact_obj_list
+
+    def generate_report(self, headers, data, report_loc):
         wb = xlwt.Workbook(encoding='utf-8')
         ws = wb.add_sheet('Report')
 
@@ -54,21 +102,21 @@ class CIAReport(object):
         font_style = xlwt.XFStyle()
         font_style.font.bold = True
 
-        # get the object properties and set as headers
-        headers = data[0].__dict__.keys()
         for col_num, val in enumerate(headers):
             ws.write(row_num, col_num, val, font_style)
 
         # Sheet body, remaining rows
         default_style = xlwt.XFStyle()
-                   
         for rowdata in data:
             row_num += 1
-            for col, val in enumerate(rowdata.__dict__.values()):
-                ws.write(row_num, col, val, default_style)
+            for col, field in enumerate(headers):
+                # logging.info(field)
+                if hasattr(rowdata, field):
+                    # logging.info('{}:{}'.format(col, getattr(rowdata, field)))
+                    ws.write(row_num, col, getattr(rowdata, field), default_style)
 
         wb.save(report_loc)
-        logging.info("Genereated Report Done!")
+        logging.info("Genereated Report Done!")        
 
 
 if __name__ == '__main__':
@@ -89,5 +137,16 @@ if __name__ == '__main__':
     # use db tool to create engine and connect to database
     db_util = DBTool(schema_prefix, host, port)
     ciareport = CIAReport(report_loc, db_util)
+    # get changed objects from central schema
     changed_objs = ciareport.get_changed_objs()
-    ciareport.generate_report( changed_objs, 'changedObjs.xls')
+    changed_headers = ['local_id', 'central_id', 'full_name',
+                       'module', 'snapshot', 'status', 'obj_type']
+    ciareport.generate_report(changed_headers, changed_objs, 'changedObjs.xls')
+
+    # get impact objects from local schema
+    impact_objs = ciareport.get_impact_objs(2832, 2, 2, 613)
+    # ciareport.generate_report( impact_objs, 'impactObjs.xls')
+    impact_headers = ['source_id', 'target_id', 'caller_name',
+                      'caller_fullname', 'callee_name', 'callee_fullname',
+                      'call_level', 'call_way']
+    ciareport.generate_report(impact_headers, impact_objs, 'impactObjs.xls')
