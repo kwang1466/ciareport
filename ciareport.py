@@ -1,23 +1,37 @@
-import cast_upgrade_1_6_2
 import logging
 from db_util import *
 import argparse
-from packages import xlwt
+import xlwt
 from cast_objs import *
 
 
 class CIAReport(object):
     """docstring for CIAReport"""
+
+    @classmethod
+    def set_logger(cls, level):
+        log_format = '%(asctime)s -%(levelname)s- %(filename)s:%(lineno)d -- %(message)s'
+        logging.basicConfig(format=log_format,
+                            level=level,
+                            datefmt='%Y-%b-%d %H:%M:%S',
+                            )
+        fh = logging.FileHandler(filename='report.log', encoding='GBK')
+        fh.setFormatter(logging.Formatter(log_format))
+        fh.setLevel(level)
+        Logger = logging.getLogger(__name__)
+        Logger.addHandler(fh)
+        return Logger
+
     def __init__(self, report_path, db_util):
         super(CIAReport, self).__init__()
         self.db_util = db_util
         self.report_path = report_path
 
     def get_changed_objs(self):
-        logging.info('starting to get changed objects')
+        Logger.info('starting to get changed objects')
         sql_str = '''
                     select  idm.local_object_id,cos.object_id as central_object_id,cos.object_name,cos.module_name,cos.snapshot_name,cos.object_status,
-                    case 
+                    case
                      when lower(cos.object_status) like 'deleted'
                         then (select dtdv.techno_type_name from dss_techno_display_vw dtdv where dtdv.techno_type_id = cos.obejct_techno_type_id )
                     else ( select dot.object_type_name from  dss_object_types dot, dss_objects dob where dob.object_id = cos.object_id and dot.object_type_id = dob.object_type_id)
@@ -29,69 +43,68 @@ class CIAReport(object):
         sql_str = ''.join(sql_str.split('\n'))
         # logging.info(sql_str)
         central_schema = self.db_util.get_schema('central')
-        cursor = central_schema.create_cursor()
-        cursor.execute(sql_str)
+        central_schema.execute(sql_str)
         count = 0
         change_obj_list = list()
-        for o in cursor:
+        for o in central_schema.fetchall():
             count += 1
-            # logging.info(o)
+            Logger.debug(o)
+            # print(o)
             change_obj_list.append(ChangedObj(o[0], o[1], o[2], o[3], o[4], o[5], o[6]))
 
-        logging.info('Found {} changed objects'.format(count))
+        Logger.info('Found {} changed objects'.format(count))
         return change_obj_list
-        
+
     def get_impact_objs(self, obj_id, called_lvl, calling_lvl, obj_type='613'):
         # try to get impact objects from local schema
-        logging.info('Starting to get impacted objects')
+        Logger.info('Starting to get impacted objects')
         local_schema = self.db_util.get_schema('local')
-        cursor = local_schema.create_cursor()
         function_call = 'pre_olia'
 
-        local_schema._execute_function(cursor, function_call)
+        local_schema.execute('select {}()'.format(function_call))
 
         function_call2 = 'OLIA'
         # function: olia in local schema
-        # olia(p_idsource integer, p_levelcalled integer, 
+        # olia(p_idsource integer, p_levelcalled integer,
         #      p_levelcalling integer, p_accknd integer, p_objtyp integer)
         paramters = '{},{},{},{},{}'.format(obj_id, called_lvl, calling_lvl, 0, obj_type)
 
         # paramters = '2832, 2, 2, 0, 613'
-        local_schema._execute_function(cursor, function_call2, paramters)
+        local_schema.execute('select {}({})'.format(function_call2, paramters))
 
         sql_str = '''
-        select distinct 
-        t.IdSource, 
-        t.IdTarget, 
+        select distinct
+        t.IdSource,
+        t.IdTarget,
         sourcekey.KeyNam as caller_name,
         coalesce(sourceobject.FullName, ' ') as caller_fullname,
-        targetkey.KeyNam as callee_name, 
+        targetkey.KeyNam as callee_name,
         coalesce(targetobject.FullName, ' ') as callee_fullname,
-        t.InternalLevel as call_level, 
-        Case t.Ways  
+        t.InternalLevel as call_level,
+        Case t.Ways
         WHEN '1' THEN 'called'
         WHEN '2' THEN 'calling'
-        ELSE 'others' 
+        ELSE 'others'
         END call_relationships
-        from 
-        TmpOLIA t, 
-        webgoat_local.Keys sourcekey left outer join webgoat_local.ObjFulNam sourceObject on sourcekey.IdKey = sourceobject.IdObj ,
-        webgoat_local.Keys targetkey left outer join webgoat_local.ObjFulNam targetobject on targetkey.IdKey = targetobject.IdObj   
-        where 
-        targetkey.IdKey = t.IdTarget 
+        from
+        TmpOLIA t,
+        webgoat_local.Keys sourcekey left outer join webgoat_local.ObjFulNam sourceObject on sourcekey.IdKey = sourceobject.IdObj,
+        webgoat_local.Keys targetkey left outer join webgoat_local.ObjFulNam targetobject on targetkey.IdKey = targetobject.IdObj
+        where
+        targetkey.IdKey = t.IdTarget
         and sourcekey.IdKey=t.IdSource
         order by t.InternalLevel;
         '''
         sql_str = ''.join(sql_str.split('\n'))
-        cursor.execute(sql_str)
+        local_schema.execute(sql_str)
         count = 0
         impact_obj_list = list()
-        for o in cursor:
+        for o in local_schema.fetchall():
             count += 1
-            # logging.info(o)
+            Logger.debug(o)
             impact_obj_list.append(ImpactObj(o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7]))
 
-        logging.info('Found {} impacted objects'.format(count))
+        Logger.info('Found {} impacted objects'.format(count))
         return impact_obj_list
 
     def generate_report(self, headers, data, report_name):
@@ -111,18 +124,21 @@ class CIAReport(object):
         for rowdata in data:
             row_num += 1
             for col, field in enumerate(headers):
-                # logging.info(field)
+                logging.debug(field)
                 if hasattr(rowdata, field):
                     # logging.info('{}:{}'.format(col, getattr(rowdata, field)))
                     ws.write(row_num, col, getattr(rowdata, field), default_style)
 
         wb.save(self.report_path + '/' + report_name)
-        logging.info("Genereated Report Done!")        
+        Logger.info("Genereated Report Done!")
 
 
 if __name__ == '__main__':
-    logging.info('start generating report!')
 
+    global Logger
+    Logger = CIAReport.set_logger(logging.INFO)
+
+    Logger.info('start generating report!')
     parser = argparse.ArgumentParser(add_help=False)
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument('-o', required=False, dest='report_path', default='./Reports', help='report location')
@@ -163,5 +179,5 @@ if __name__ == '__main__':
         impact_headers = ['source_id', 'target_id', 'caller_name',
                           'caller_fullname', 'callee_name', 'callee_fullname',
                           'call_level', 'call_way']
-        ciareport.generate_report(impact_headers, impact_objs, 
+        ciareport.generate_report(impact_headers, impact_objs,
                                   'impactObjs-{}.xls'.format(single_obj.full_name))
