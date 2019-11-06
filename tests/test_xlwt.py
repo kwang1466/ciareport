@@ -1,5 +1,4 @@
 import sys
-sys.path.append('../packages')
 import xlwt
 from datetime import datetime
 import unittest
