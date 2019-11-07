@@ -1,6 +1,6 @@
+import sys
 import pg8000
 import unittest
-import sys
 sys.path.append('..')
 from db_util import *
 
