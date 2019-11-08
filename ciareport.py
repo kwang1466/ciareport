@@ -3,6 +3,8 @@ from db_util import *
 import argparse
 import xlwt
 from cast_objs import *
+import networkx as nx
+import matplotlib.pyplot as plt
 
 
 class CIAReport(object):
@@ -132,6 +134,21 @@ class CIAReport(object):
         wb.save(self.report_path + '/' + report_name)
         Logger.info("Genereated Report Done!")
 
+    def generate_call_graph(self, report_path, node_id, data):
+        # data should be list(tuple)
+        G = nx.MultiDiGraph()
+        # G.add_edges_from([(83939, 38224), (83939, 83850), (38224, 3017)])
+        G.add_edges_from(data)
+        plt.subplot(111)
+        # nx.draw(G, pos=nx.spring_layout(G),
+        #         with_labels=True, edge_color='b',
+        #         node_color='y', node_size=1200, width=2)
+        nx.draw(G, pos=nx.shell_layout(G),
+                with_labels=True, edge_color='b',
+                node_color='y', node_size=1200, width=2)
+        # plt.show()
+        plt.savefig('{}/{}_call_graph.png'.format(report_path, node_id))
+
 
 if __name__ == '__main__':
 
@@ -146,9 +163,9 @@ if __name__ == '__main__':
     requiredNamed.add_argument('-p', required=False, dest='port', default=2280, help='database port')
     requiredNamed.add_argument('-s', required=False, dest='schema_prefix', default='webgoat', help='Schema Prefix Name')
     requiredNamed.add_argument('-r', required=False, dest='report_option',
-                               default='ChangeObjects', choices=['ChangeObjects', 'ImpactObj', 'All'],
+                               default='ImpactObj', choices=['ChangeObjects', 'ImpactObj', 'All'],
                                help='generate change objects report')
-    requiredNamed.add_argument('-id', required=False, dest='id', help='object id')
+    requiredNamed.add_argument('-id', required=False, dest='id', default=83939, help='object id')
     requiredNamed.add_argument('-level', required=False, dest='level', default=2, help='call level')
     args = parser.parse_args()
 
@@ -197,4 +214,7 @@ if __name__ == '__main__':
         impact_headers = ['source_id', 'target_id', 'caller_name',
                           'caller_fullname', 'callee_name', 'callee_fullname',
                           'call_level', 'call_way']
+        graph_data = [(getattr(rowdata, 'source_id'), getattr(rowdata, 'target_id'))
+                      for rowdata in impact_objs]
         ciareport.generate_report(impact_headers, impact_objs, 'impactObjs-{}.xls'.format(obj_id))
+        ciareport.generate_call_graph(report_path, obj_id, graph_data)
