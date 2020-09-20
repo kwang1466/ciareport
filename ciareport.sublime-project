@@ -5,7 +5,8 @@
             "file_regex": "^[ ]*File \"(...*?)\", line ([0-9]*)",
             "name": "Anaconda Python Builder",
             "selector": "source.python",
-            "shell_cmd": "\"D:\\Tools\\8.2.15_Build2047_flat_for_customer\\ThirdParty\\Python34\\python.exe\" -u \"$file\""
+            "shell_cmd": "\"D:\\Tools\\8.2.15_Build2047_flat_for_customer\\ThirdParty\\Python34\\python.exe\" -u \"$file\"",
+            "env": {"PYTHONPATH": ".;D:\\IdeaProjects\\CIAReport\\MainBranch\\ciareport"},
         }
     ],
     "folders":

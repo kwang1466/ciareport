@@ -1,5 +1,5 @@
-import sys
-sys.path.append('..')
+# import sys
+# sys.path.append('..')
 import cast_upgrade_1_6_2
 import unittest
 import logging

@@ -8,16 +8,31 @@ from cast_objs import *
 
 class CIAReport(object):
     """docstring for CIAReport"""
+
     def __init__(self, report_path, db_util):
         super(CIAReport, self).__init__()
         self.db_util = db_util
         self.report_path = report_path
 
+    def get_fileInfo(self, object_id):
+        file_path = ' '
+        sql_str = 'select file_path from csv_file_objects where object_id={}'.format(object_id)
+        local_schema = self.db_util.get_schema('local')
+        cursor = local_schema.create_cursor()
+        cursor.execute(sql_str)
+        results = cursor.fetchall()
+        # for row in results:
+        #     print(row)
+        if len(results) > 0:
+            # print('filePath: {}'.format(results[0][0]))
+            file_path = results[0][0]
+        return file_path
+
     def get_changed_objs(self):
         logging.info('starting to get changed objects')
         sql_str = '''
                     select  idm.local_object_id,cos.object_id as central_object_id,cos.object_name,cos.module_name,cos.snapshot_name,cos.object_status,
-                    case 
+                    case
                      when lower(cos.object_status) like 'deleted'
                         then (select dtdv.techno_type_name from dss_techno_display_vw dtdv where dtdv.techno_type_id = cos.obejct_techno_type_id )
                     else ( select dot.object_type_name from  dss_object_types dot, dss_objects dob where dob.object_id = cos.object_id and dot.object_type_id = dob.object_type_id)
@@ -36,11 +51,13 @@ class CIAReport(object):
         for o in cursor:
             count += 1
             # logging.info(o)
-            change_obj_list.append(ChangedObj(o[0], o[1], o[2], o[3], o[4], o[5], o[6]))
+            # print('local id: {} - local name: {}'.format(o[0], o[2]))
+            file_path = self.get_fileInfo(o[0])
+            change_obj_list.append(ChangedObj(o[0], o[1], file_path, o[2], o[3], o[4], o[5], o[6]))
 
         logging.info('Found {} changed objects'.format(count))
         return change_obj_list
-        
+
     def get_impact_objs(self, obj_id, called_lvl, calling_lvl, obj_type='613'):
         # try to get impact objects from local schema
         logging.info('Starting to get impacted objects')
@@ -52,7 +69,7 @@ class CIAReport(object):
 
         function_call2 = 'OLIA'
         # function: olia in local schema
-        # olia(p_idsource integer, p_levelcalled integer, 
+        # olia(p_idsource integer, p_levelcalled integer,
         #      p_levelcalling integer, p_accknd integer, p_objtyp integer)
         paramters = '{},{},{},{},{}'.format(obj_id, called_lvl, calling_lvl, 0, obj_type)
 
@@ -60,27 +77,33 @@ class CIAReport(object):
         local_schema._execute_function(cursor, function_call2, paramters)
 
         sql_str = '''
-        select distinct 
-        t.IdSource, 
-        t.IdTarget, 
+        select distinct
+        t.IdSource,
+        cfo_caller.file_path,
+        t.IdTarget,
+        cfo_callee.file_path,
         sourcekey.KeyNam as caller_name,
         coalesce(sourceobject.FullName, ' ') as caller_fullname,
-        targetkey.KeyNam as callee_name, 
+        targetkey.KeyNam as callee_name,
         coalesce(targetobject.FullName, ' ') as callee_fullname,
-        t.InternalLevel as call_level, 
-        Case t.Ways  
+        t.InternalLevel as call_level,
+        Case t.Ways
         WHEN '1' THEN 'called'
         WHEN '2' THEN 'calling'
-        ELSE 'others' 
+        ELSE 'others'
         END call_relationships
-        from 
-        TmpOLIA t, 
-        webgoat_local.Keys sourcekey left outer join webgoat_local.ObjFulNam sourceObject on sourcekey.IdKey = sourceobject.IdObj ,
-        webgoat_local.Keys targetkey left outer join webgoat_local.ObjFulNam targetobject on targetkey.IdKey = targetobject.IdObj   
-        where 
-        targetkey.IdKey = t.IdTarget 
+        from
+        TmpOLIA t,
+        Keys sourcekey left outer join ObjFulNam sourceObject on sourcekey.IdKey = sourceobject.IdObj ,
+        Keys targetkey left outer join ObjFulNam targetobject on targetkey.IdKey = targetobject.IdObj ,
+        csv_file_objects cfo_caller, csv_file_objects cfo_callee
+        where
+        targetkey.IdKey = t.IdTarget
         and sourcekey.IdKey=t.IdSource
-        order by t.InternalLevel;
+        and cfo_callee.object_id = t.IdTarget
+        and cfo_caller.object_id = t.IdSource
+        order by t.InternalLevel
+        ;
         '''
         sql_str = ''.join(sql_str.split('\n'))
         cursor.execute(sql_str)
@@ -89,7 +112,7 @@ class CIAReport(object):
         for o in cursor:
             count += 1
             # logging.info(o)
-            impact_obj_list.append(ImpactObj(o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7]))
+            impact_obj_list.append(ImpactObj(o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7], o[8], o[9]))
 
         logging.info('Found {} impacted objects'.format(count))
         return impact_obj_list
@@ -117,7 +140,7 @@ class CIAReport(object):
                     ws.write(row_num, col, getattr(rowdata, field), default_style)
 
         wb.save(self.report_path + '/' + report_name)
-        logging.info("Genereated Report Done!")        
+        logging.info("Genereated Report Done!")
 
 
 if __name__ == '__main__':
@@ -127,8 +150,8 @@ if __name__ == '__main__':
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument('-o', required=False, dest='report_path', default='./Reports', help='report location')
     requiredNamed.add_argument('-h', required=False, dest='host', default='localhost', help='database host name or ip')
-    requiredNamed.add_argument('-p', required=False, dest='port', default=2280, help='database port')
-    requiredNamed.add_argument('-s', required=False, dest='schema_prefix', default='webgoat', help='Schema Prefix Name')
+    requiredNamed.add_argument('-p', required=True, dest='port', default=2280, help='database port')
+    requiredNamed.add_argument('-s', required=True, dest='schema_prefix', default='webgoat', help='Schema Prefix Name')
     args = parser.parse_args()
 
     report_path = args.report_path
@@ -140,7 +163,7 @@ if __name__ == '__main__':
     ciareport = CIAReport(report_path, db_util)
     # get changed objects from central schema
     changed_objs = ciareport.get_changed_objs()
-    changed_headers = ['local_id', 'central_id', 'full_name',
+    changed_headers = ['local_id', 'central_id', 'file_path', 'full_name',
                        'module', 'snapshot', 'status', 'obj_type']
     ciareport.generate_report(changed_headers, changed_objs, 'changedObjs.xls')
 
@@ -160,8 +183,8 @@ if __name__ == '__main__':
         local_id = single_obj.local_id
         # by default we only calculate 2 levels calling/called
         impact_objs = ciareport.get_impact_objs(local_id, 2, 2, 613)
-        impact_headers = ['source_id', 'target_id', 'caller_name',
+        impact_headers = ['source_id', 'source_file', 'target_id', 'target_file', 'caller_name',
                           'caller_fullname', 'callee_name', 'callee_fullname',
                           'call_level', 'call_way']
-        ciareport.generate_report(impact_headers, impact_objs, 
+        ciareport.generate_report(impact_headers, impact_objs,
                                   'impactObjs-{}.xls'.format(single_obj.full_name))
