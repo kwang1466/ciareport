@@ -10,9 +10,8 @@ NB:
 2. By default, ciareport.py would only generate 5 excel report for Impacted Objets; This means you can modify the main in ciareport.py to do more things.
    
    Code to change if needed:
-      # iterate changed_objs and generate the impact report for each object
+<code>
     for count, single_obj in enumerate(changed_objs):
-        # normally we only generate for 5 impact_object reort
         if count > 5:
             break
         local_id = single_obj.local_id
@@ -24,4 +23,4 @@ NB:
         ciareport.generate_report(impact_headers, impact_objs,
                                   'impactObjs-{}.xls'.format(single_obj.full_name))
 
-
+</code>
