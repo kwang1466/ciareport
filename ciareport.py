@@ -8,6 +8,7 @@ from cast_objs import *
 
 class CIAReport(object):
     """docstring for CIAReport"""
+    all_target_files = set()
 
     def __init__(self, report_path, db_util):
         super(CIAReport, self).__init__()
@@ -53,7 +54,10 @@ class CIAReport(object):
             # logging.info(o)
             # print('local id: {} - local name: {}'.format(o[0], o[2]))
             file_path = self.get_fileInfo(o[0])
-            change_obj_list.append(ChangedObj(o[0], o[1], file_path, o[2], o[3], o[4], o[5], o[6]))
+            # sava all the data from sql to list
+            # change_obj_list.append(ChangedObj(o[0], o[1], file_path, o[2], o[3], o[4], o[5], o[6]))
+            # save part of the sql script data to list
+            change_obj_list.append(ChangedObj(o[0], o[2], file_path, o[5], o[6]))
 
         logging.info('Found {} changed objects'.format(count))
         return change_obj_list
@@ -112,7 +116,13 @@ class CIAReport(object):
         for o in cursor:
             count += 1
             # logging.info(o)
-            impact_obj_list.append(ImpactObj(o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7], o[8], o[9]))
+            # save the data from sql script to list
+            # impact_obj_list.append(ImpactObj(o[0], o[1], o[2], o[3], o[4], o[5], o[6], o[7], o[8], o[9]))
+            # only get the part of sql script data to list
+            impact_obj_list.append(ImpactObj(o[0], o[1], o[3], o[4], o[5], o[6], o[7], o[8], o[9]))
+            self.all_target_files.add(TargetFile(o[3]))
+            # only save part of the sql script data to list
+            # impact_obj_list.append(ImpactObj( o[2], o[3], o[4], o[5], o[6], o[7], o[8], o[9]))
 
         logging.info('Found {} impacted objects'.format(count))
         return impact_obj_list
@@ -126,14 +136,14 @@ class CIAReport(object):
         font_style = xlwt.XFStyle()
         font_style.font.bold = True
 
-        for col_num, val in enumerate(headers):
+        for col_num, val in enumerate(headers.values()):
             ws.write(row_num, col_num, val, font_style)
 
         # Sheet body, remaining rows
         default_style = xlwt.XFStyle()
         for rowdata in data:
             row_num += 1
-            for col, field in enumerate(headers):
+            for col, field in enumerate(headers.keys()):
                 # logging.info(field)
                 if hasattr(rowdata, field):
                     # logging.info('{}:{}'.format(col, getattr(rowdata, field)))
@@ -150,7 +160,7 @@ if __name__ == '__main__':
     requiredNamed = parser.add_argument_group('required named arguments')
     requiredNamed.add_argument('-o', required=False, dest='report_path', default='./Reports', help='report location')
     requiredNamed.add_argument('-h', required=False, dest='host', default='localhost', help='database host name or ip')
-    requiredNamed.add_argument('-p', required=True, dest='port', default=2280, help='database port')
+    requiredNamed.add_argument('-p', required=True, dest='port', default=2280, help='database port', type=int)
     requiredNamed.add_argument('-s', required=True, dest='schema_prefix', default='webgoat', help='Schema Prefix Name')
     args = parser.parse_args()
 
@@ -163,28 +173,38 @@ if __name__ == '__main__':
     ciareport = CIAReport(report_path, db_util)
     # get changed objects from central schema
     changed_objs = ciareport.get_changed_objs()
-    changed_headers = ['local_id', 'central_id', 'file_path', 'full_name',
-                       'module', 'snapshot', 'status', 'obj_type']
-    ciareport.generate_report(changed_headers, changed_objs, 'changedObjs.xls')
+    # changed_headers = ['local_id', 'central_id', 'file_path', 'full_name',
+    #                    'module', 'snapshot', 'status', 'obj_type']
+    # changed_headers_dict = {'local_id': '本地ID', 'central_id': '中央ID', 'file_path': '文件路径', 'full_name': '全名',
+    #                         'module': '模块', 'snapshot': '快照', 'status': '状态', 'obj_type': '类型'}
+    # only put some part of info to final report
+    changed_headers_dict = {'local_id': '对象ID', 'full_name': '全名', 'file_path': '文件路径',
+                            'status': '状态', 'obj_type': '类型'}
+    # ciareport.generate_report(changed_headers, changed_objs, '变更对象清单.xls')
+    ciareport.generate_report(changed_headers_dict, changed_objs, '变更对象清单.xls')
 
     # # get impact objects from local schema for specific object
-    # impact_objs = ciareport.get_impact_objs(2832, 2, 2, 613)
-    # # ciareport.generate_report( impact_objs, 'impactObjs.xls')
+    impact_objs = ciareport.get_impact_objs(2832, 2, 2, 613)
+    # ciareport.generate_report( impact_objs, 'impactObjs.xls')
     # impact_headers = ['source_id', 'target_id', 'caller_name',
     #                   'caller_fullname', 'callee_name', 'callee_fullname',
     #                   'call_level', 'call_way']
-    # ciareport.generate_report(impact_headers, impact_objs, 'impactObjs.xls')
-
     # iterate changed_objs and generate the impact report for each object
     for count, single_obj in enumerate(changed_objs):
         # normally we only generate for 5 impact_object reort
-        if count > 5:
-            break
+        # if count > 5:
+        #     break
         local_id = single_obj.local_id
         # by default we only calculate 2 levels calling/called
         impact_objs = ciareport.get_impact_objs(local_id, 2, 2, 613)
-        impact_headers = ['source_id', 'source_file', 'target_id', 'target_file', 'caller_name',
-                          'caller_fullname', 'callee_name', 'callee_fullname',
-                          'call_level', 'call_way']
-        ciareport.generate_report(impact_headers, impact_objs,
-                                  'impactObjs-{}.xls'.format(single_obj.full_name))
+        # impact_headers = ['source_id', 'source_file', 'target_id', 'target_file', 'caller_name',
+        #                   'caller_fullname', 'callee_name', 'callee_fullname',
+        #                   'call_level', 'call_way']
+        impact_headers_dict = {'source_id': '源对象ID', 'source_name': '源对象', 'source_fullname': '源对象全名', 'source_file': '源文件',
+                               'target_name': '目标对象', 'target_fullname': '目标对象全名', 'target_file': '目标文件',
+                               'call_level': '调用层级', 'call_way': '调用方向'}
+        ciareport.generate_report(impact_headers_dict, impact_objs,
+                                  '关联对象-{}.xls'.format(single_obj.local_id))
+    all_target_files_list = list(ciareport.all_target_files)
+    all_target_files_headers = {'target_file': '文件名'}
+    ciareport.generate_report(all_target_files_headers, all_target_files_list, '关联影响文件清单.xls')
