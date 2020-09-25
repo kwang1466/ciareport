@@ -22,12 +22,31 @@ class TestString(unittest.TestCase):
             print('{}:{}'.format(o, temdict[o]))
         # print(temdict['b'])
 
+    @unittest.skip('old case\n')
     def test_re(self):
         str1 = ' -cp $CLASSPATH $BASECLASS $MAINCLASS $CONFIG\n'
         pattern = r'\$[A-Z]+'
         # for o in re.finditer(pattern, str1):
         #     print(str1[o.start()+1:o.end()])
         print([str1[o.start() + 1:o.end()] for o in re.finditer(pattern, str1)])
+
+    def test_set(self):
+        print('test set and list')
+        set_a = set()
+        # count = 0
+        for i in range(10):
+            set_a.add(i)
+        print(set_a)
+        print(list(set_a))
+
+        list_b = list()
+        for j in range(20):
+            list_b.append(j)
+        for i in range(10):
+            list_b.append(i)
+        print(list_b)
+        print(list(set(list_b)))
+
 
 if __name__ == '__main__':
     unittest.main()
