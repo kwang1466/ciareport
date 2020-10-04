@@ -7,6 +7,7 @@ import sys
 sys.path.append('packages')
 from packages import openpyxl
 from cast_objs import *
+from collections import OrderedDict
 
 
 class CIAReport(object):
@@ -184,8 +185,15 @@ if __name__ == '__main__':
     # changed_headers_dict = {'local_id': '本地ID', 'central_id': '中央ID', 'file_path': '文件路径', 'full_name': '全名',
     #                         'module': '模块', 'snapshot': '快照', 'status': '状态', 'obj_type': '类型'}
     # only put some part of info to final report
-    changed_headers_dict = {'local_id': '对象ID', 'full_name': '全名', 'file_path': '文件路径',
-                            'status': '状态', 'obj_type': '类型'}
+    # changed_headers_dict = {'local_id': '对象ID', 'full_name': '全名', 'file_path': '文件路径',
+    #                         'status': '状态', 'obj_type': '类型'}
+    # try to use OrderedDict to set the headers
+    changed_headers_dict = OrderedDict()
+    changed_headers_dict['local_id'] = '对象ID'
+    changed_headers_dict['full_name'] = '全名'
+    changed_headers_dict['file_path'] = '文件路径'
+    changed_headers_dict['status'] = '状态'
+    changed_headers_dict['obj_type'] = '类型'
     # ciareport.generate_report(changed_headers, changed_objs, '变更对象清单.xls')
     ciareport.generate_report(changed_headers_dict, changed_objs, '变更对象清单.xlsx')
 
@@ -198,17 +206,27 @@ if __name__ == '__main__':
     # iterate changed_objs and generate the impact report for each object
     for count, single_obj in enumerate(changed_objs):
         # normally we only generate for 5 impact_object reort
-        # if count > 5:
-        #     break
+        if count > 5:
+            break
         local_id = single_obj.local_id
         # by default we only calculate 2 levels calling/called
         impact_objs = ciareport.get_impact_objs(local_id, 2, 2, 613)
         # impact_headers = ['source_id', 'source_file', 'target_id', 'target_file', 'caller_name',
         #                   'caller_fullname', 'callee_name', 'callee_fullname',
         #                   'call_level', 'call_way']
-        impact_headers_dict = {'source_id': '源对象ID', 'source_name': '源对象', 'source_fullna   /b/h/h/h/h//hhhhhhhhhxzbgggggggme': '源对象全名', 'source_file': '源文件',
+        impact_headers_dict = {'source_id': '源对象ID', 'source_name': '源对象', 'source_fullname': '源对象全名', 'source_file': '源文件',
                                'target_name': '目标对象', 'target_fullname': '目标对象全名', 'target_file': '目标文件',
                                'call_level': '调用层级', 'call_way': '调用方向'}
+        impact_headers_dict = OrderedDict()
+        impact_headers_dict['source_id'] = '源对象ID'
+        impact_headers_dict['source_name'] = '源对象'
+        impact_headers_dict['source_fullname'] = '源对象全名'
+        impact_headers_dict['source_file'] = '源文件'
+        impact_headers_dict['target_name'] = '目标对象'
+        impact_headers_dict['target_fullname'] = '目标对象全名'
+        impact_headers_dict['target_file'] = '目标文件'
+        impact_headers_dict['call_level'] = '调用层级'
+        impact_headers_dict['call_way'] = '调用方向'
         ciareport.generate_report(impact_headers_dict, impact_objs,
                                   '关联对象-{}.xlsx'.format(single_obj.local_id))
     all_target_files_list = list()
